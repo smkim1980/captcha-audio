@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Login</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- 20250411 javascript 암호화 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+<form method="post" th:action="@{/authenticate}">
+    <input type="text" id="username" name="username" placeholder="아이디" required><br>
+    <input type="password" id="password" name="password" placeholder="비밀번호" required><br>
+    <input type="hidden" id="encodedKey" th:value="${encodedKey}">
+    <!-- Captcha 이미지 -->
+    <img id="captchaImage" th:src="@{/captcha-image}" alt="Captcha" style="margin-bottom: 10px;"><br>
+    <button type="button" onclick="refreshCaptcha()">Captcha 새로고침</button>
+    <button type="button" onclick="playAudioCaptcha()" aria-label="음성 캡차 듣기">음성 캡차</button><br>
+    <input type="text" id="captchaInput" name="captchaInput" placeholder="Captcha 입력" required><br>
+
+    <button type="submit" onclick="submitLogin()">로그인</button>
+</form>
+<span th:if="${error}" th:text="${error}"></span>
+
+<script>
+    // 암호화 함수
+    function encryptPassword(password) {
+        const encodedKey = $("#encodedKey").val();
+        console.log("encodedKey :: ", encodedKey);
+        var secretkey = encodedKey;
+        var key = CryptoJS.enc.Utf8.parse(secretkey);
+        var iv = CryptoJS.enc.Utf8.parse(secretkey.substring(0, 16));
+
+        /*-- Encryption --*/
+        var cipherText = CryptoJS.AES.encrypt(password, key, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        }).toString();
+        console.log("cipherText :: ", cipherText);
+
+        /*-- Decryption --*/
+        var decrypted = CryptoJS.AES.decrypt(cipherText, key, {
+            iv: iv,
+            mode: CryptoJS.mode.CBC,
+            padding: CryptoJS.pad.Pkcs7
+        });
+        console.log("password :: ", password);
+        console.log("decrypted :: ", decrypted.toString(CryptoJS.enc.Utf8));
+
+        return cipherText;
+    }
+
+    function getCookie(name) {
+        var value = "; " + document.cookie;
+        var parts = value.split("; " + name + "=");
+        if (parts.length == 2) return parts.pop().split(";").shift();
+    }
+
+    function refreshCaptcha() {
+        var captchaImage = document.getElementById('captchaImage');
+        captchaImage.src = '/captcha-image?' + new Date().getTime(); // 캐시 방지를 위해 타임스탬프 추가
+        // 음성 캡차도 새로고침
+        stopAudioCaptcha();
+    }
+
+    function playAudioCaptcha() {
+        stopAudioCaptcha(); // 기존 오디오 중지
+        var audio = new Audio('/audio?' + new Date().getTime());
+        audio.play().catch(function(error) {
+            console.error("오디오 재생 오류: ", error);
+            alert("음성 캡차를 재생할 수 없습니다.");
+        });
+        // 오디오 객체를 전역으로 저장해 관리
+        window.currentAudio = audio;
+    }
+
+    function stopAudioCaptcha() {
+        if (window.currentAudio) {
+            window.currentAudio.pause();
+            window.currentAudio.currentTime = 0;
+            window.currentAudio = null;
+        }
+    }
+
+    function submitLogin() {
+        const username = $("#username").val();
+        const password = encryptPassword($("#password").val());
+        const captchaInput = $("#captchaInput").val();
+        const encodedKey = $("#encodedKey").val();
+        console.log('username=', username);
+        console.log('password=', password);
+        console.log('captchaInput=', captchaInput);
+
+        $.ajax({
+            url: '/authenticate',
+            type: 'POST',
+            data: {
+                username: username,
+                password: password,
+                captchaInput: captchaInput,
+                encodedKey: encodedKey
+            },
+            success: function(response) {
+                if (response.success) {
+                    alert("로그인 성공!");
+                    window.location.href = "/success";
+                } else {
+                    alert("로그인 실패: " + response.message);
+                    refreshCaptcha();
+                }
+            },
+            error: function(xhr, status, error) {
+                alert("오류가 발생했습니다: " + error);
+                refreshCaptcha();
+            }
+        });
+    }
+</script>
+</body>
+</html>

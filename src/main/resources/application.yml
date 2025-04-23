@@ -1,0 +1,17 @@
+##spring.application.name=spring-captcha
+spring:
+  thymeleaf:
+    cache: false
+    prefix: classpath:/templates/thymeleaf/
+    suffix: .html
+    mode: HTML
+  application:
+    name: captcha
+
+server:
+  servlet:
+    session:
+      timeout: 30m
+      cookie:
+        http-only: true
+        secure: false
